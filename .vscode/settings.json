@@ -1,0 +1,27 @@
+{
+    "aliosStudio.sdkPath": "/Users/beiluo/.aos/AliOS-Things",
+    "files.associations": {
+        "uart_driver.h": "c",
+        "dispatch.h": "c",
+        "string.h": "c",
+        "pthread.h": "c",
+        "fcntl.h": "c",
+        "types.h": "c",
+        "termios.h": "c",
+        "parson.h": "c",
+        "curl.h": "c",
+        "limits": "c",
+        "type_traits": "c",
+        "md5.h": "c",
+        "gateway.h": "c",
+        "stdio.h": "c",
+        "gate_422_protocol.h": "c",
+        "lucas.h": "c",
+        "debug.h": "c",
+        "platform_uart.h": "c",
+        "platform_peripheral.h": "c",
+        "platform.h": "c",
+        "stdlib.h": "c",
+        "device_protocol.h": "c"
+    }
+}

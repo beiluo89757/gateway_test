@@ -1,0 +1,3 @@
+/Users/beiluo/Desktop/OTIS_GATEWAY/cmake/CMakeFiles/rebuild_cache.dir
+/Users/beiluo/Desktop/OTIS_GATEWAY/cmake/CMakeFiles/edit_cache.dir
+/Users/beiluo/Desktop/OTIS_GATEWAY/cmake/CMakeFiles/test.dir
