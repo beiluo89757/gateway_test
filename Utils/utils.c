@@ -22,7 +22,8 @@ void printRawData (char type, char *p, int len)
 			printf("CR");
 		}
 		else
-		printf ("%c", p[i]);
+		 printf ("%c", p[i]);
+		//printf ("%02x", p[i]);
 		printf (" ");
 	}
 	printf ("\r\n");

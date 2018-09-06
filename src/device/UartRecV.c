@@ -5,7 +5,7 @@
 
 size_t uart_get_one_packet(uart_index_t uart, char* inBuf, int inBufLen);
 
-void uartRecv_task(void *arg)
+void *uartRecv_task(void *arg)
 {
     int recvlen;
 
@@ -48,3 +48,25 @@ size_t uart_get_one_packet(uart_index_t uart, char* inBuf, int inBufLen)
 exit:
 	return 0;
 }
+#if 0
+size_t uart_get_one_packet(uart_index_t uart, char* inBuf, int inBufLen)
+{
+	int err = 0;
+	uint8_t *p;
+	while(1)
+	{
+		p = inBuf;
+		err = uart_recv( uart, p, 3, 0);
+		if(err <=0 )
+			goto exit;
+		if((inBuf[0] != 0x1b)||(inBuf[1] != 0x5b)||(inBuf[2] != 0x48))
+			goto exit;
+		err = uart_recv( uart, p+3, FRAME_LENTH*3-3, 3);
+		if(err <=0 )
+			goto exit;
+		return FRAME_LENTH*3;
+	}
+exit:
+	return 0;
+}
+#endif

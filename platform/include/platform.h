@@ -1,6 +1,6 @@
 #pragma once
 
-#define UART_422    "/dev/tty.usbserial-FTZ55T4K"//"/dev/tty.usbserial-FTZ55T4K"//"/dev/tty.usbserial"//"/dev/ttyCOM1"
+#define UART_422    "/dev/tty.usbserial-FT1CPP6G"//"/dev/tty.usbserial-FTZ55T4K"//"/dev/tty.usbserial"//"/dev/ttyCOM1"
 #define UART_232    "/dev/ttyCOM2"
 
 

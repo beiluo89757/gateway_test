@@ -125,10 +125,6 @@ lucas.h
 /Users/beiluo/Desktop/OTIS_GATEWAY/src/lucas.h
 GateWay.h
 /Users/beiluo/Desktop/OTIS_GATEWAY/src/GateWay.h
-sys/ipc.h
--
-sys/msg.h
--
 
 /Users/beiluo/Desktop/OTIS_GATEWAY/src/device/Device_Json.c
 GateWay.h

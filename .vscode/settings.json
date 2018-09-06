@@ -22,6 +22,7 @@
         "platform_peripheral.h": "c",
         "platform.h": "c",
         "stdlib.h": "c",
-        "device_protocol.h": "c"
+        "device_protocol.h": "c",
+        "msg.h": "c"
     }
 }

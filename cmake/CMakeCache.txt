@@ -193,6 +193,12 @@ CMAKE_STRIP:FILEPATH=/Library/Developer/CommandLineTools/usr/bin/strip
 CMAKE_VERBOSE_MAKEFILE:BOOL=FALSE
 
 //Value Computed by CMake
+test1_BINARY_DIR:STATIC=/Users/beiluo/Desktop/OTIS_GATEWAY/cmake
+
+//Value Computed by CMake
+test1_SOURCE_DIR:STATIC=/Users/beiluo/Desktop/OTIS_GATEWAY
+
+//Value Computed by CMake
 test_BINARY_DIR:STATIC=/Users/beiluo/Desktop/OTIS_GATEWAY/cmake
 
 //Value Computed by CMake

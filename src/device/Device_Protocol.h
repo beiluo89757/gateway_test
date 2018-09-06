@@ -5,9 +5,9 @@
 #define UART_ONE_PACKAGE_LENGTH 1024
 #define FRAME_LENTH 37
 
-#define CONTROLLER_SCN_INFO_MAX     10
-#define DRIVE_SCN_INFO_MAX          10
-#define DRIVE_SCN_CLOCK_MAX         5
+#define CONTROLLER_SCN_INFO_MAX_10      10
+#define DRIVE_SCN_INFO_MAX              10
+#define DRIVE_SCN_CLOCK_MAX             5
 
 
 typedef enum{
@@ -72,10 +72,7 @@ typedef struct _drive_stauts{
 
 
 typedef struct _gateway_status
-{
-    // bool                 drive_status_onoff;
-    // bool                 controller_status_onoff;
-    
+{   
     controller_status_t  controller_status;
     controller_events_t  controller_events;
 
@@ -84,18 +81,63 @@ typedef struct _gateway_status
 
 }gateway_status_t;
 
+// typedef struct _update_status
+// {
+//     controller_status_t     controller_status;
+//     drive_status_t          drive_status;
+
+//     char                    *controller_scn;
+//     char                    *controller_events;
+
+//     char                    *drive_scn; 
+//     char                    *drive_events; 
+
+// }update_status_t;
+
+
+
+typedef struct _controller_scn
+{
+    char scn[38];
+}controller_scn_t;
+
+typedef struct _controller_event
+{
+    char event_log[200];
+}controller_event_t;
+
+typedef struct _drive_scn
+{
+    char scn[38];
+}drive_scn_t;
+
+typedef struct _drive_event
+{
+    char event_log[200];
+}drive_event_t;
+
 typedef struct _update_status
 {
     controller_status_t     controller_status;
     drive_status_t          drive_status;
 
-    char                    *controller_scn;
-    char                    *controller_events;
+    char                    controller_scn_num;
+    char                    controller_events_num;
 
-    char                    *drive_scn; 
-    char                    *drive_events; 
+    char                    drive_scn_num;
+    char                    drive_events_num;
+
+    controller_scn_t        controller_scn[20];
+    controller_event_t      controller_events[100];
+
+    drive_scn_t             drive_scn[20];
+    drive_event_t           drive_events[100];
 
 }update_status_t;
+
+
+
+
 
 
 

@@ -331,7 +331,7 @@ exit:
 	return err;
 }
 
-void gateway_ota_task(void *arg)
+void *gateway_ota_task(void *arg)
 {
 	int err = 0;
 	USER_OTA_CONTEXT_T user_ota_context;

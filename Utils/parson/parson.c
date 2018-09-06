@@ -618,7 +618,17 @@ error:
 
 /* Return processed contents of a string between quotes and
    skips passed argument to a matching quote. */
-static char * get_quoted_string(const char **string) {
+// static char * get_quoted_string(const char **string) {
+//     const char *string_start = *string;
+//     size_t string_len = 0;
+//     JSON_Status status = skip_quotes(string);
+//     if (status != JSONSuccess) {
+//         return NULL;
+//     }
+//     string_len = *string - string_start - 2; /* length without quotes */
+//     return process_string(string_start + 1, string_len);
+// }
+char * get_quoted_string(const char **string) {
     const char *string_start = *string;
     size_t string_len = 0;
     JSON_Status status = skip_quotes(string);
@@ -945,7 +955,6 @@ static int json_serialize_to_buffer_r(const JSON_Value *value, char *buf, int le
             return -1;
     }
 }
-
 static int json_serialize_string(const char *string, char *buf) {
     size_t i = 0, len = strlen(string);
     char c = '\0';

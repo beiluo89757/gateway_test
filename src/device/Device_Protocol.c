@@ -5,6 +5,7 @@
 extern GateWay_Context_t GateWay_Context;
 extern void printRawData (char type, char *p, int len);
 
+time_t seconds_start;
 char *read_start_time[30]={0};
 char *read_end_time[20]={0};
 char *controller_end_time[20]={0};
@@ -18,14 +19,15 @@ uint8_t recv_buf[FRAME_LENTH*3] = {0};
 
 uint8_t previous_status[FRAME_LENTH] = {0};
 
-uint8_t current_status[FRAME_LENTH] = {0x1b,0x5b, 0x48, 0x20, 0x20, 0x6c ,0x6f,  0x63, 0x61, 0x6c, 
-                                        0x20, 0x53, 0x56, 0x54, 0x20, 0x20, 0x20, 0x20, 0x20, 0x0d, 
-                                        0x0a, 0x20, 0x20, 0x64, 0x69, 0x73, 0x63, 0x6f,  0x6e, 0x6e, 
-                                        0x65, 0x63, 0x74, 0x65, 0x64, 0x20, 0x20};
+
+uint8_t current_status[FRAME_LENTH] = {0};
+
 update_status_t gateway_update_context;
 
-
-
+char *controller_event_string ="{\"number\":%d,\"text\":\"%s\",\"cnt\":%d,\"age\":%d,\"position\":%d}";
+char *drive_event_string ="{\"number\":%d,\"text\":\"%s\",\"time\":\"%s\",\"cnt\":%d}";
+char *controller_scn_string ="\"%s\"";
+char *drive_scn_string ="\"%s\"";
 
 void uart_data_process(char *buffer, int datalen)
 {      
@@ -33,17 +35,26 @@ void uart_data_process(char *buffer, int datalen)
     
     //printRawData(0,buffer,datalen);
     memcpy(recv_buf, buffer, datalen);
-    if((!memcmp(recv_buf,recv_buf+FRAME_LENTH,FRAME_LENTH))&&(!memcmp(recv_buf,recv_buf+2*FRAME_LENTH,FRAME_LENTH)))
+    lower_to_upper(recv_buf,datalen);
+    if(0!=memcmp("CLOCK",recv_buf+3,5))
     {
-        lower_to_upper(recv_buf,FRAME_LENTH);
+        if((!memcmp(recv_buf,recv_buf+FRAME_LENTH,FRAME_LENTH))&&(!memcmp(recv_buf,recv_buf+2*FRAME_LENTH,FRAME_LENTH)))
+        {
+            memcpy(current_status, recv_buf, sizeof(current_status));      
+            printRawData (CUR_STATUS, current_status, sizeof(current_status));
+        }
+    }
+    else
+    {
         memcpy(current_status, recv_buf, sizeof(current_status));      
-        printRawData (CUR_STATUS, current_status, sizeof(current_status));
+        printRawData (CUR_STATUS, current_status, sizeof(current_status));       
     }
 }
 OSStatus wait_device_status()
 {
-    int err = -1;
-    for(int i = 0;  i<40; i++)
+    OSStatus err = -1;
+    
+    for(int i = 0;  i<50; i++)
     {
         msleep(50);
         if(0 != memcmp(current_status, previous_status ,FRAME_LENTH))
@@ -79,19 +90,11 @@ OSStatus gw_422_controller_event_log_fun(void)
     int goon_count = 0;
     index_t index = CON_SCN_INDEX;
     gateway_status_t gateway_status={0};
-    JSON_Value* events = NULL;
-    JSON_Object* events_root;
-    
 
+    memset(gateway_update_context.controller_events,0,sizeof(gateway_update_context.controller_events));
+    memset(&gateway_update_context.controller_status,0,sizeof(gateway_update_context.controller_status));
+    gateway_update_context.controller_events_num = 0;
 
-
-    JSON_Value *events_vaule = json_value_init_array();
-    JSON_Array *events_arr = json_value_get_array(events_vaule);
-    if(gateway_update_context.controller_events!=NULL)
-    {
-        free(gateway_update_context.controller_events);
-        gateway_update_context.controller_events=NULL; 
-    }
     while(1)
     {   
         switch(index)
@@ -205,17 +208,16 @@ OSStatus gw_422_controller_event_log_fun(void)
                         gateway_status.controller_events.age = atoi(tmp_age);
                         memcpy(tmp_possition, current_status+35, 2);
                         gateway_status.controller_events.position = atoi(tmp_possition);
-     
-                        events = json_value_init_object();
-                        events_root = json_object(events);
-                        json_object_set_number(events_root, "number", gateway_status.controller_events.number);
-                        json_object_set_string(events_root, "text", gateway_status.controller_events.text);
-                        json_object_set_number(events_root, "cnt", gateway_status.controller_events.cnt);
-                        json_object_set_number(events_root, "age", gateway_status.controller_events.age);
-                        json_object_set_number(events_root, "position", gateway_status.controller_events.position);
 
-                        json_array_append_value(events_arr,events);
-
+                        if(gateway_update_context.controller_events_num<100)
+                        {
+                                sprintf(gateway_update_context.controller_events[gateway_update_context.controller_events_num++].event_log,controller_event_string,
+                                gateway_status.controller_events.number,
+                                gateway_status.controller_events.text,
+                                gateway_status.controller_events.cnt,
+                                gateway_status.controller_events.age,
+                                gateway_status.controller_events.position);
+                        }
                         index = CON_SCN_TEST_INFO_GOON;                                        
                     } 
                 }           
@@ -226,27 +228,16 @@ OSStatus gw_422_controller_event_log_fun(void)
 
         if(index == HAND_SHAKE || index == CON_SCN || index == DRIVE_SCN)
         {
-            if(index == DRIVE_SCN)
-            {
-                setStrTime(controller_end_time);
-                index = DRIVE_CURRENT_LOG;
-                char* encoded = json_serialize_to_string(events_vaule);   
-                gateway_update_context.controller_events = calloc(strlen(encoded)+1,1);
-                strcpy(gateway_update_context.controller_events,encoded);                     
-                free(encoded); 
-                device_log("================================================    \r\n%s",gateway_update_context.controller_events);   
-
-            }
+            // if(index == DRIVE_SCN)
+            // {
+            //     setStrTime(controller_end_time); 
+            //     index = DRIVE_CURRENT_LOG;
+            // }
             err =  index;
             goto exit;
         }    
     }   
 exit:
-    if(events_vaule!=NULL)
-    {
-        json_value_free(events_vaule); 
-    }
-
     return err;
 }
 
@@ -255,24 +246,24 @@ OSStatus gw_422_controller_scn_fun(void)
     OSStatus err =0;
 
     int goon_count = 0;
-
+    int START_GOON;
+    int CON_SCN_ERR = 0;
     index_t index = CON_SCN_INDEX;
+    
     gateway_status_t gateway_status={0};
-    memset(&gateway_update_context.controller_status,0,sizeof(gateway_update_context.controller_status));
 
-    JSON_Value *scn_value = json_value_init_array();
-    JSON_Array *scn_arr = json_value_get_array(scn_value);
-    if(gateway_update_context.controller_scn!=NULL)
-    {
-        free(gateway_update_context.controller_scn);
-        gateway_update_context.controller_scn=NULL; 
-    }
+    uint8_t controller_scn_first_page[FRAME_LENTH] = {0};
+
+    memset(gateway_update_context.controller_scn,0,sizeof(gateway_update_context.controller_scn));
+    gateway_update_context.controller_scn_num = 0;
+
     while(1)
     {   
         switch(index)
         {
             case CON_SCN_INDEX:
                 device_log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~  (CON_SCN_INDEX)");
+                
                 if(!memcmp("DISCONNECTED",current_status+23,12))
                 {
                     memcpy(previous_status,current_status,FRAME_LENTH);
@@ -286,7 +277,7 @@ OSStatus gw_422_controller_scn_fun(void)
                 else
                 {             
                     UartSend(UART_COM1,"M",1);   
-                    msleep(500);
+                    msleep(300);
                     UartSend(UART_COM1,"M",1);
                     if(0 == wait_device_status())
                     {
@@ -294,6 +285,7 @@ OSStatus gw_422_controller_scn_fun(void)
                             index = CON_SCN_GECB_MENU;
                     }
                 }
+                printRawData (CUR_STATUS, current_status, sizeof(current_status));
                 break;
             case CON_SCN_GECB_MENU:
                 device_log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~  (CON_SCN_GECB_MENU)\n");
@@ -336,7 +328,7 @@ OSStatus gw_422_controller_scn_fun(void)
                         {
                             device_log("2~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
                             memcpy(gateway_status.controller_status.scn,current_status+25,11);
-                            json_array_append_string(scn_arr,gateway_status.controller_status.scn);
+                            sprintf(gateway_update_context.controller_scn[gateway_update_context.controller_scn_num++].scn,controller_scn_string,gateway_status.controller_status.scn);
                             index = CON_SCN_EVENT_LOG;
                         }
                         else
@@ -350,41 +342,75 @@ OSStatus gw_422_controller_scn_fun(void)
                 break; 
             case CON_SCN_TEST_INFO_GOON:
                 device_log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~  (CON_SCN_TEST_INFO_GOON)\n");
-                if(goon_count++ >= CONTROLLER_SCN_INFO_MAX)
+                if(goon_count++ >= CONTROLLER_SCN_INFO_MAX_10)
                 {
-                    if(gateway_status.controller_status.scn[0]==0)
+                    if(gateway_update_context.controller_scn_num==0)
                         index = DRIVE_SCN;
                     else
                         index = CON_EVENT_LOG;
                     break;
                 }
                 UartSend(UART_COM1,">",1); 
-                if(0 == wait_device_status())
+                wait_device_status();
+                if(START_GOON == 0)
                 {
-                    if(!memcmp("BASELINE USED:",current_status+3,14))
-                    {
-                        if(!memcmp("NO.  ",current_status+21,4))
-                        {
-                            if(0 != memcmp(gateway_status.controller_status.scn,current_status+21,11))
-                            {
-                                memcpy(gateway_status.controller_status.scn,current_status+21,11);
-                                json_array_append_string(scn_arr,gateway_status.controller_status.scn);
-                            }
-                            else
-                                index = CON_EVENT_LOG;
-                        }
-                        else
-                        {
-                            if(0 !=memcmp(gateway_status.controller_status.scn,current_status+25,11))
-                            {
-                                memcpy(gateway_status.controller_status.scn,current_status+25,11);
-                                json_array_append_string(scn_arr,gateway_status.controller_status.scn);
-                            }
-                            else
-                                index = CON_EVENT_LOG;
-                        }
-                    }  
+                    START_GOON = 1;
+                    memcpy(controller_scn_first_page,current_status,37);
                 }
+                else 
+                {
+                    if(0==memcmp(controller_scn_first_page,current_status,37))
+                    {
+                        index = CON_EVENT_LOG;
+                        break;
+                    }
+                }
+                if(!memcmp("BASELINE USED:",current_status+3,14))
+                {
+                    if(!memcmp("NO.  ",current_status+21,4))
+                    {
+                        CON_SCN_ERR = 0;
+                        for(int i=0; i<gateway_update_context.controller_scn_num; i++)
+                        {
+                            if((0 != memcmp(gateway_update_context.controller_scn[gateway_update_context.controller_scn_num].scn,current_status+21,11))||\
+                               (0 != memcmp(gateway_update_context.controller_scn[gateway_update_context.controller_scn_num].scn,"           ",11)))
+                            {
+                                CON_SCN_ERR = -1;
+                                break;
+                            }
+                        }
+                        if(CON_SCN_ERR ==0){
+                            memcpy(gateway_status.controller_status.scn,current_status+21,11);
+                            if(gateway_update_context.controller_scn_num<20)
+                                sprintf(gateway_update_context.controller_scn[gateway_update_context.controller_scn_num++].scn,controller_scn_string,gateway_status.controller_status.scn);
+                            device_log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~222  %s\n",gateway_update_context.controller_scn[gateway_update_context.controller_scn_num-1].scn);
+                        }
+                        // if(0 != memcmp(gateway_status.controller_status.scn,current_status+21,11))
+                        // {
+                        //     device_log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~  33333\n");
+                        //     memcpy(gateway_status.controller_status.scn,current_status+21,11);
+                        //     if(gateway_update_context.controller_scn_num<20)
+                        //     {
+                        //         sprintf(gateway_update_context.controller_scn[gateway_update_context.controller_scn_num++].scn,controller_scn_string,gateway_status.controller_status.scn);
+                        //         device_log("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~222  %s\n",gateway_update_context.controller_scn[gateway_update_context.controller_scn_num-1].scn);
+                        //     }
+                        // }   
+                        // else
+                        //     index = CON_EVENT_LOG;
+                    }
+                    // else if(!memcmp("GP",current_status+21,2))/////////////////
+                    // {
+                    //     if(0 !=memcmp(gateway_status.controller_status.scn,current_status+25,11))
+                    //     {
+                    //         memcpy(gateway_status.controller_status.scn,current_status+25,11);
+                    //         if(gateway_update_context.controller_scn_num<20)
+                    //             sprintf(gateway_update_context.controller_scn[gateway_update_context.controller_scn_num++].scn,controller_scn_string,gateway_status.controller_status.scn);
+                    //     }
+                    //     else
+                    //         index = CON_EVENT_LOG;
+                    // }
+                }  
+                printRawData (CUR_STATUS, current_status, sizeof(current_status));
                 break;
             default:
                 break;
@@ -392,38 +418,26 @@ OSStatus gw_422_controller_scn_fun(void)
          
         if(index == HAND_SHAKE || index == CON_EVENT_LOG || index == DRIVE_SCN)
         {
-            if(index == CON_EVENT_LOG)
-            {
-                char* controller_scn = json_serialize_to_string(scn_value);          
-                gateway_update_context.controller_scn = calloc(strlen(controller_scn)+1,1);    
-                strcpy(gateway_update_context.controller_scn,controller_scn);            
-                free(controller_scn); 
-            }
             err =  index;
             goto exit;
         }   
     }
 exit:
-    if(scn_value!=NULL)
-    {
-        json_value_free(scn_value); 
-    }
     return err;
 }
 OSStatus gw_422_driver_scn_fun(void)
 {
     OSStatus err =0;
-    int goon_count = 0, clock_count = 0 ;
+    int goon_count = 0, START_GOON = 0;
     index_t index = DRIVE_SCN_INDEX;
+
     gateway_status_t gateway_status={0};
+    
+    uint8_t drive_scn_first_page[FRAME_LENTH] = {0};
+
+    memset(gateway_update_context.drive_scn,0,sizeof(gateway_update_context.drive_scn));
     memset(&gateway_update_context.drive_status,0,sizeof(gateway_update_context.drive_status));
-    JSON_Value *drive_scn_value = json_value_init_array();
-    JSON_Array *drive_scn_arr = json_value_get_array(drive_scn_value);
-    if(gateway_update_context.drive_scn!=NULL)
-    {
-        free(gateway_update_context.drive_scn);
-        gateway_update_context.drive_scn=NULL; 
-    }
+    gateway_update_context.drive_scn_num = 0;
     while(1)
     {   
         switch(index)
@@ -511,92 +525,70 @@ OSStatus gw_422_driver_scn_fun(void)
                 break; 
             case DRIVE_SCN_INFO_GOON:
                 device_log("+++++++++++++++++++++++++++++++++++++++++++++++  (DRIVE_SCN_INFO_GOON)\n");
-                if(goon_count++ >= DRIVE_SCN_INFO_MAX)
-                {
-                    index = DRIVE_SCN_INFO_CLOCK;
-                }
                 UartSend(UART_COM1,">",1); 
 
                 wait_device_status();
-                if(!memcmp("DRIVE APP SCN",current_status+3,13)||!memcmp("GDCB-SW SCN",current_status+3,11)||!memcmp("PRIMARY LDR SCN",current_status+3,15))
+                if(START_GOON == 0)
                 {
-                    if(!memcmp("NO.  ",current_status+21,4))
+                    START_GOON = 1;
+                    memcpy(drive_scn_first_page,current_status,37);
+                }
+                else 
+                {
+                    if(0==memcmp(drive_scn_first_page,current_status,37))
                     {
-                        
-                        if(0!= memcmp(gateway_status.drive_status.scn,current_status+25,11))
-                        {
-                            memcpy(gateway_status.drive_status.scn,current_status+25,11);
-                            json_array_append_string(drive_scn_arr,gateway_status.drive_status.scn);
-                        }
+                        index = DRIVE_CURRENT_LOG;
+                        break;
                     }
-                    else
+                }
+                if(0==memcmp("DRIVE APP SCN",current_status+3,13)||!memcmp("GDCB-SW SCN",current_status+3,11)||!memcmp("PRIMARY LDR SCN",current_status+3,15))
+                {
+                    memcpy(gateway_status.drive_status.scn,current_status+24,5);
+                    if(gateway_update_context.drive_scn_num<20)
                     {
-                        if(0!= memcmp(gateway_status.drive_status.scn,current_status+21,11))
-                        {
-                            memcpy(gateway_status.drive_status.scn,current_status+25,11);
-                            json_array_append_string(drive_scn_arr,gateway_status.drive_status.scn);
-                        }
-                    }
-                    device_log("+++++++++++++++++++++++++++++++++++++++++++++++ %s \n",gateway_status.drive_status.scn);
-                }  
-                printRawData (CUR_STATUS, current_status, sizeof(current_status));      
+                        sprintf(gateway_update_context.drive_scn[gateway_update_context.drive_scn_num++].scn,drive_scn_string,gateway_status.drive_status.scn);
+                        device_log("+++++++++++++++++++++++++++++++++++++++++++++++ %s \n",gateway_update_context.drive_scn[gateway_update_context.drive_scn_num]);
 
-                break;
-            case DRIVE_SCN_INFO_CLOCK:
-                device_log("+++++++++++++++++++++++++++++++++++++++++++++++  (DRIVE_SCN_INFO_CLOCK)\n");
-                if(clock_count++ >= DRIVE_SCN_CLOCK_MAX)
+                    }
+
+                    //device_log("+++++++++++++++++++++++++++++++++++++++++++++++ %s \n",gateway_status.drive_status.scn);
+                } 
+                if((0==memcmp(current_status+2+16+2+5,":",1))&&(0==memcmp(current_status+2+16+2+8,":",1))&&(0==memcmp(current_status+2+16+2+11,":",1))&&(0==memcmp(current_status+2+16+2+14,".",1)))
                 {
-                    index = DRIVE_CURRENT_LOG;
-                }
-                UartSend(UART_COM1,">",1); 
-                wait_device_status();
-                if(!memcmp("CLOCK",current_status+3,5))
-                {
-                    memcpy(gateway_update_context.drive_status.time,current_status+21,16);
-                    index = DRIVE_CURRENT_LOG;
-                }
-                printRawData (CUR_STATUS, current_status, sizeof(current_status));      
+                    device_log("perhapers be clock");
+                    if(!memcmp("CLOCK",current_status+3,5))
+                    {
+                        device_log("Must be clock");
+                        memcpy(gateway_update_context.drive_status.time,current_status+21,16);
+                        device_log("+++++++++++++++++++++++++++++++++++++++++++++++ %s \n",gateway_status.drive_status.time);
+                    }
+                } 
+                printRawData (lucas_status, current_status, sizeof(current_status));      
                 break;
             default:
                 break;
         }
-         
+         device_log("+++++++++++++++++++++++++++++++++++++++++++++++ %s \n",gateway_status.drive_status.time);
         if(index == HAND_SHAKE || index == DRIVE_CURRENT_LOG || index == UPDATE_EVENT_LOG)
         {
-            if(index == DRIVE_CURRENT_LOG)
-            {
-                char* drive_scn = json_serialize_to_string(drive_scn_value);          
-                gateway_update_context.drive_scn = calloc(strlen(drive_scn)+1,1);    
-                strcpy(gateway_update_context.drive_scn,drive_scn);            
-                free(drive_scn);   
-                device_log("++++++++++++++++++++++ \r\n %s",gateway_update_context.drive_scn);             
-            }
             err =  index;
             goto exit;
         }   
     }
 exit:
-    if(drive_scn_value!=NULL)
-    {
-        json_value_free(drive_scn_value);
-    }
     return err;
 }
+
 OSStatus gw_422_driver_current_log_fun(void)
 {
     int err =0;
     int goon_count = 0, clock_count = 0 ;
     index_t index = DRIVE_SCN_INDEX;
     gateway_status_t gateway_status={0};
-    JSON_Value *events = NULL;
-    JSON_Object *events_root;
-    JSON_Value *events_vaule = json_value_init_array();
-    JSON_Array *events_arr = json_value_get_array(events_vaule);
-    if(gateway_update_context.drive_events!=NULL)
-    {
-        free(gateway_update_context.drive_events);
-        gateway_update_context.drive_events=NULL; 
-    }
+
+    memset(gateway_update_context.drive_events,0,sizeof(gateway_update_context.drive_events));
+    gateway_update_context.drive_events_num = 0;
+    gateway_status.drive_events.cnt = 1;
     while(1)
     {   
         switch(index)
@@ -629,7 +621,7 @@ OSStatus gw_422_driver_current_log_fun(void)
                     else
                         index = DRIVE_SCN_INDEX;
                 }
-                                printRawData (CUR_STATUS, current_status, sizeof(current_status));      
+                printRawData (CUR_STATUS, current_status, sizeof(current_status));      
 
                 break;
             case DRIVE_SCN_SYSTEM:
@@ -681,20 +673,17 @@ OSStatus gw_422_driver_current_log_fun(void)
                     memcpy(gateway_status.drive_events.text, current_status+7, 12);
                     memcpy(gateway_status.drive_events.time, current_status+21, 16);
                     gateway_status.drive_events.number = atoi(tmp); 
-
-                    events = json_value_init_object();
-                    events_root = json_object(events);
-                    json_object_set_number(events_root, "number", gateway_status.drive_events.number);
-                    json_object_set_string(events_root, "text", gateway_status.drive_events.text);
-                    json_object_set_string(events_root, "time", gateway_status.drive_events.time);
-                    json_object_set_number(events_root, "cnt", gateway_status.drive_events.cnt);
-
-                    json_array_append_value(events_arr,events);
+                    if(gateway_update_context.drive_events_num<100)
+                        sprintf(gateway_update_context.drive_events[gateway_update_context.drive_events_num++].event_log,drive_event_string,
+                        gateway_status.drive_events.number,
+                        gateway_status.drive_events.text,
+                        gateway_status.drive_events.time,
+                        gateway_status.drive_events.cnt);
                     index =  DRIVE_CURRENT_INFO_GOON;
                 }
                 else
                     index = DRIVE_SCN_INDEX;  
-                                    printRawData (CUR_STATUS, current_status, sizeof(current_status));      
+                printRawData (CUR_STATUS, current_status, sizeof(current_status));      
          
                 break; 
             case DRIVE_CURRENT_INFO_GOON:
@@ -715,20 +704,19 @@ OSStatus gw_422_driver_current_log_fun(void)
                         memcpy(gateway_status.drive_events.time, current_status+21, 16);
                         gateway_status.drive_events.number = atoi(tmp_1); 
 
-                        events = json_value_init_object();
-                        events_root = json_object(events);
-                        json_object_set_number(events_root, "number", gateway_status.drive_events.number);
-                        json_object_set_string(events_root, "text", gateway_status.drive_events.text);
-                        json_object_set_string(events_root, "time", gateway_status.drive_events.time);
-                        json_object_set_number(events_root, "cnt", gateway_status.drive_events.cnt);
+                        if(gateway_update_context.drive_events_num<100)
+                            sprintf(gateway_update_context.drive_events[gateway_update_context.drive_events_num++].event_log,drive_event_string,
+                            gateway_status.drive_events.number,
+                            gateway_status.drive_events.text,
+                            gateway_status.drive_events.time,
+                            gateway_status.drive_events.cnt);
 
-                        json_array_append_value(events_arr,events);
                         index =  DRIVE_CURRENT_INFO_GOON;
                     }
                     else
                         index = UPDATE_EVENT_LOG;
                 }              
-                                printRawData (CUR_STATUS, current_status, sizeof(current_status));      
+                printRawData (CUR_STATUS, current_status, sizeof(current_status));      
 
                 break;
             default:
@@ -737,31 +725,19 @@ OSStatus gw_422_driver_current_log_fun(void)
          
         if(index == HAND_SHAKE || index == UPDATE_EVENT_LOG)
         {
-            if(index == UPDATE_EVENT_LOG)
-            {
-                setStrTime(read_end_time);
-                char* drive_events = json_serialize_to_string(events_vaule);          
-                gateway_update_context.drive_events = calloc(strlen(drive_events)+1,1);    
-                strcpy(gateway_update_context.drive_events,drive_events);            
-                free(drive_events);                
-            }
             err =  index;
             goto exit;
         }   
     }
 exit:
-    if(events_vaule!=NULL)
-    {
-        json_value_free(events_vaule);
-    }
     return err;
 }
-void query_status_task(void *arg)
+
+void *query_status_task(void *arg)
 {
-    index_t index = CON_EVENT_LOG;
+    index_t index = CON_SCN;
 
     GateWay_Context_t gateway = *(GateWay_Context_t*)arg;
-
     while(1)
     {   
         switch(index)
@@ -769,27 +745,40 @@ void query_status_task(void *arg)
             case HAND_SHAKE:  
                 device_log("#################     start handshake    #################");
                 index = gateway.gw_422_handshake_fun(); 
-                index = CON_EVENT_LOG;
                 break;
             case CON_SCN:
+                
                 device_log("################# start collect scn info #################");
-                index = gateway.gw_422_controller_scn_fun();
+                if(gateway_update_context.controller_scn_num==0)
+                {
+                    seconds_start = time((time_t *)NULL);
+                    index = gateway.gw_422_controller_scn_fun();
+                }
+                else
+                    index = CON_EVENT_LOG;
                 break;
             case CON_EVENT_LOG:
+                seconds_start = time((time_t *)NULL);
                 device_log("################# start collect controller event_log info #################");
                 index = gateway.gw_422_controller_event_log_fun(); 
                 break;
             case DRIVE_SCN:
                 device_log("################# start collect drive scn info #################");
-                index = gateway.gw_422_driver_scn_fun(); 
+                if(gateway_update_context.drive_scn_num==0)
+                    index = gateway.gw_422_driver_scn_fun(); 
+                else
+                    index = DRIVE_CURRENT_LOG;
                 break;
             case DRIVE_CURRENT_LOG:
                 device_log("################# start collect drive event_log info #################");
                 index = gateway.gw_422_driver_current_log_fun(); 
                 break;
             case UPDATE_EVENT_LOG:
-                controller_event_log_to_json();
-                goto exit;
+                 device_log("################# start update  event_log  #################");
+                // sleep(5);
+                update_to_cloud();
+                //controller_event_log_to_json();
+                // goto exit;
                 index = CON_EVENT_LOG;
                 break;
             default:
@@ -799,4 +788,20 @@ void query_status_task(void *arg)
 exit:
     pthread_exit(NULL);
 }
+
+
+// void *query_status_task(void *arg)
+// {
+//     index_t index = DRIVE_SCN;
+
+//     GateWay_Context_t gateway = *(GateWay_Context_t*)arg;
+
+//     while(1)
+//     {
+//         sleep(10);
+//         // update_to_cloud();
+//     }
+// exit:
+//     pthread_exit(NULL);
+// }
 

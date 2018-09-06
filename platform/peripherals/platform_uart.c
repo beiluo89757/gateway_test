@@ -63,14 +63,17 @@ OSStatus uart_set_option(platform_uart_drivers_t uart)
 	case ODD_PARITY:
 		newtio.c_cflag |= PARENB;
 		newtio.c_cflag |= PARODD;
-		newtio.c_iflag |= (INPCK | ISTRIP);
+		// newtio.c_iflag |= (INPCK | ISTRIP);
 		break;
 	case EVEN_PARITY: 
-		newtio.c_iflag |= (INPCK | ISTRIP);
 		newtio.c_cflag |= PARENB;
 		newtio.c_cflag &= ~PARODD;
+		//newtio.c_iflag |= (INPCK | ISTRIP);
 		break;
 	case NO_PARITY:  
+		newtio.c_cflag &= ~PARENB;
+		break;
+	default:
 		newtio.c_cflag &= ~PARENB;
 		break;
 	}
@@ -102,6 +105,8 @@ OSStatus uart_set_option(platform_uart_drivers_t uart)
 		newtio.c_cflag &=  ~CSTOPB;
 	else if ( uart.uart_config.stop_bits == STOP_BITS_2 )
 		newtio.c_cflag |=  CSTOPB;
+
+	newtio.c_oflag &=~OPOST;
 
 	newtio.c_cc[VTIME]  = 0;
 	newtio.c_cc[VMIN] = 0;
